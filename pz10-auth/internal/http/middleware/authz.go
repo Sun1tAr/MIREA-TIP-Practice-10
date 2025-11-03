@@ -1,9 +1,8 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 func AuthZRoles(allowed ...string) func(http.Handler) http.Handler {
@@ -11,31 +10,37 @@ func AuthZRoles(allowed ...string) func(http.Handler) http.Handler {
 	for _, a := range allowed {
 		set[a] = struct{}{}
 	}
+
+	log.Printf("AuthZRoles: allowed roles: %v", allowed)
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Printf("AuthZRoles: checking access for %s", r.URL.Path)
+
 			claimsVal := r.Context().Value(CtxClaimsKey)
 			if claimsVal == nil {
+				log.Printf("AuthZRoles: no claims in context")
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 
-			// УНИВЕРСАЛЬНАЯ обработка - пробуем оба типа
-			var role string
-
-			switch c := claimsVal.(type) {
-			case map[string]any:
-				role, _ = c["role"].(string)
-			case jwt.MapClaims:
-				role, _ = c["role"].(string)
-			default:
+			claims, ok := claimsVal.(map[string]any)
+			if !ok {
+				log.Printf("AuthZRoles: invalid claims type: %T", claimsVal)
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
+
+			role, _ := claims["role"].(string)
+			log.Printf("AuthZRoles: user role: %s", role)
 
 			if _, ok := set[role]; !ok {
+				log.Printf("AuthZRoles: role %s not in allowed set %v", role, allowed)
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
+
+			log.Printf("AuthZRoles: access granted for role %s", role)
 			next.ServeHTTP(w, r)
 		})
 	}

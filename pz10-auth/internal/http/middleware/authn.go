@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
 
@@ -15,20 +16,34 @@ const CtxClaimsKey ctxKey = iota
 func AuthN(v jwt.Validator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Printf("AuthN: checking authorization header for %s", r.URL.Path)
+
 			h := r.Header.Get("Authorization")
 			if h == "" || !strings.HasPrefix(h, "Bearer ") {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-			raw := strings.TrimPrefix(h, "Bearer ")
-			claims, err := v.Parse(raw)
-			if err != nil {
+				log.Printf("AuthN: missing or invalid authorization header")
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
 
-			// Просто сохраняем claims как есть - jwt.MapClaims уже совместим с map[string]any
-			ctx := context.WithValue(r.Context(), CtxClaimsKey, claims)
+			raw := strings.TrimPrefix(h, "Bearer ")
+			log.Printf("AuthN: parsing token for path %s", r.URL.Path)
+
+			claims, err := v.Parse(raw)
+			if err != nil {
+				log.Printf("AuthN: token parse error: %v", err)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			// Конвертируем jwt.MapClaims в map[string]any
+			claimsMap := make(map[string]any)
+			for key, value := range claims {
+				claimsMap[key] = value
+			}
+
+			log.Printf("AuthN: token valid, user ID: %v, role: %v", claimsMap["sub"], claimsMap["role"])
+
+			ctx := context.WithValue(r.Context(), CtxClaimsKey, claimsMap)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

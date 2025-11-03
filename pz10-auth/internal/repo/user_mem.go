@@ -13,14 +13,14 @@ type UserRecord struct {
 	Hash  []byte
 }
 
-type UserMem struct{ users map[string]UserRecord } // key = email
+type UserMem struct{ users map[string]UserRecord }
 
 func NewUserMem() *UserMem {
-	// заранее захэшированные пароли (пример: "secret123")
 	hash := func(s string) []byte { h, _ := bcrypt.GenerateFromPassword([]byte(s), bcrypt.DefaultCost); return h }
 	return &UserMem{users: map[string]UserRecord{
 		"admin@example.com": {ID: 1, Email: "admin@example.com", Role: "admin", Hash: hash("secret123")},
 		"user@example.com":  {ID: 2, Email: "user@example.com", Role: "user", Hash: hash("secret123")},
+		"user2@example.com": {ID: 3, Email: "user2@example.com", Role: "user", Hash: hash("secret123")}, // ← добавляем еще пользователя для тестов
 	}}
 }
 
@@ -44,4 +44,14 @@ func (r *UserMem) CheckPassword(email, pass string) (UserRecord, error) {
 		return UserRecord{}, ErrBadCreds
 	}
 	return u, nil
+}
+
+// Новый метод для получения пользователя по ID
+func (r *UserMem) GetUserByID(id int64) (UserRecord, error) {
+	for _, user := range r.users {
+		if user.ID == id {
+			return user, nil
+		}
+	}
+	return UserRecord{}, ErrNotFound
 }

@@ -7,27 +7,26 @@ import (
 )
 
 type Validator interface {
-	Sign(userID int64, email, role string) (string, error)
+	Sign(userID int64, email, role string, ttl time.Duration) (string, error) // ← добавим ttl параметр
 	Parse(tokenStr string) (jwt.MapClaims, error)
 }
 
 type HS256 struct {
 	secret []byte
-	ttl    time.Duration
 }
 
-func NewHS256(secret []byte, ttl time.Duration) *HS256 {
-	return &HS256{secret: secret, ttl: ttl}
+func NewHS256(secret []byte) *HS256 { // ← убираем ttl из конструктора
+	return &HS256{secret: secret}
 }
 
-func (h *HS256) Sign(userID int64, email, role string) (string, error) {
+func (h *HS256) Sign(userID int64, email, role string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"sub":   userID,
 		"email": email,
 		"role":  role,
 		"iat":   now.Unix(),
-		"exp":   now.Add(h.ttl).Unix(),
+		"exp":   now.Add(ttl).Unix(),
 		"iss":   "pz10-auth",
 		"aud":   "pz10-clients",
 	}
@@ -35,6 +34,7 @@ func (h *HS256) Sign(userID int64, email, role string) (string, error) {
 	return t.SignedString(h.secret)
 }
 
+// Parse остается без изменений
 func (h *HS256) Parse(tokenStr string) (jwt.MapClaims, error) {
 	t, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) { return h.secret, nil },
 		jwt.WithValidMethods([]string{"HS256"}),
