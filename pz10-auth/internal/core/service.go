@@ -6,6 +6,7 @@ import (
 
 	"example.com/pz10-auth/internal/http/middleware" // ← ДОБАВИТЬ ИМПОРТ
 	"example.com/pz10-auth/internal/repo"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type userRepo interface {
@@ -35,6 +36,7 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tok, err := s.jwt.Sign(u.ID, u.Email, u.Role)
+
 	if err != nil {
 		httpError(w, 500, "token_error")
 		return
@@ -43,8 +45,29 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) MeHandler(w http.ResponseWriter, r *http.Request) {
-	// Используем тот же ключ, что и в middleware
-	claims := r.Context().Value(middleware.CtxClaimsKey).(map[string]any)
+	claimsVal := r.Context().Value(middleware.CtxClaimsKey)
+	if claimsVal == nil {
+		httpError(w, 401, "unauthorized")
+		return
+	}
+
+	// УНИВЕРСАЛЬНАЯ обработка - пробуем оба типа
+	var claims map[string]any
+
+	switch c := claimsVal.(type) {
+	case map[string]any:
+		claims = c
+	case jwt.MapClaims:
+		// Конвертируем jwt.MapClaims в map[string]any
+		claims = make(map[string]any)
+		for k, v := range c {
+			claims[k] = v
+		}
+	default:
+		httpError(w, 401, "unauthorized")
+		return
+	}
+
 	jsonOK(w, map[string]any{
 		"id":    claims["sub"],
 		"email": claims["email"],

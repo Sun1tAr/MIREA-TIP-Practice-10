@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"net/http"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func AuthZRoles(allowed ...string) func(http.Handler) http.Handler {
@@ -17,13 +19,19 @@ func AuthZRoles(allowed ...string) func(http.Handler) http.Handler {
 				return
 			}
 
-			claims, ok := claimsVal.(map[string]any)
-			if !ok {
+			// УНИВЕРСАЛЬНАЯ обработка - пробуем оба типа
+			var role string
+
+			switch c := claimsVal.(type) {
+			case map[string]any:
+				role, _ = c["role"].(string)
+			case jwt.MapClaims:
+				role, _ = c["role"].(string)
+			default:
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 
-			role, _ := claims["role"].(string)
 			if _, ok := set[role]; !ok {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
